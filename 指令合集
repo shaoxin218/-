@@ -1,0 +1,825 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>设计组AI指令库 | 团队协作版</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#165DFF',
+                    },
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .card-hover {
+                @apply transition-all duration-300 hover:shadow-lg hover:-translate-y-1;
+            }
+            .btn-primary {
+                @apply bg-primary text-white px-4 py-2 rounded-lg hover:bg-primary/90 transition-all;
+            }
+            .btn-secondary {
+                @apply border border-gray-300 px-4 py-2 rounded-lg hover:bg-gray-100 transition-all;
+            }
+            .btn-danger {
+                @apply bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition-all;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+
+<!-- 顶部导航 -->
+<header class="sticky top-0 bg-white shadow-sm z-50">
+    <div class="container mx-auto px-4 py-4 flex flex-col md:flex-row justify-between items-center">
+        <div class="flex items-center mb-3 md:mb-0">
+            <i class="fa fa-bolt text-primary text-2xl mr-2"></i>
+            <h1 class="text-xl md:text-2xl font-bold">设计组AI指令库</h1>
+        </div>
+        <div class="flex gap-3 w-full md:w-auto flex-wrap">
+            <button id="add-btn" class="btn-primary flex-1 md:flex-initial">
+                <i class="fa fa-plus mr-1"></i>新增指令
+            </button>
+            <button id="category-manage-btn" class="btn-secondary flex-1 md:flex-initial">
+                <i class="fa fa-th-list mr-1"></i>分类管理
+            </button>
+            <div class="relative w-full md:w-64 mt-2 md:mt-0">
+                <input id="search-input" placeholder="搜索指令..." 
+                    class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary/50">
+                <i class="fa fa-search absolute right-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+            </div>
+        </div>
+    </div>
+
+    <!-- 分类导航 -->
+    <nav class="border-t">
+        <div class="container mx-auto px-4">
+            <ul id="category-tabs" class="flex flex-wrap py-3 gap-2"></ul>
+        </div>
+    </nav>
+</header>
+
+<!-- 主内容 -->
+<main class="container mx-auto px-4 py-6">
+    <div id="list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+</main>
+
+<!-- 分类管理弹窗 -->
+<div id="category-modal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 hidden">
+    <div class="bg-white rounded-lg w-full max-w-lg p-6 mx-4">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="text-lg font-bold">分类管理</h3>
+            <button id="close-category-modal" class="text-gray-500 hover:text-gray-700">
+                <i class="fa fa-times text-xl"></i>
+            </button>
+        </div>
+        <div class="mb-3">
+            <label class="block text-sm font-medium text-gray-700 mb-1">新增分类名称</label>
+            <input id="new-category-name" placeholder="例如：插画生成类" class="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-primary/50">
+        </div>
+        <button id="add-category-btn" class="btn-primary w-full mb-4">
+            <i class="fa fa-plus mr-1"></i>添加分类
+        </button>
+        <div class="text-sm font-medium text-gray-700 mb-2">现有分类</div>
+        <ul id="category-list" class="max-h-60 overflow-y-auto space-y-2"></ul>
+    </div>
+</div>
+
+<!-- 新增/编辑指令 -->
+<div id="form-modal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 hidden">
+    <div class="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6 mx-4">
+        <div class="flex justify-between items-center mb-4">
+            <h3 id="form-title-text" class="font-bold text-lg">新增AI指令</h3>
+            <button id="close-form" class="text-gray-500 hover:text-gray-700">
+                <i class="fa fa-times text-xl"></i>
+            </button>
+        </div>
+        <input type="hidden" id="item-id">
+        <div class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">指令标题 <span class="text-red-500">*</span></label>
+                <input id="item-title" class="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-primary/50">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">选择分类 <span class="text-red-500">*</span></label>
+                <select id="item-category" class="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-primary/50"></select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">AI指令内容 <span class="text-red-500">*</span></label>
+                <textarea id="item-content" rows="6" class="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-primary/50" placeholder="请输入完整的AI指令内容..."></textarea>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">使用说明</label>
+                <textarea id="item-desc" rows="3" class="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-primary/50" placeholder="请输入该指令的使用场景、注意事项等..."></textarea>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">成果图片</label>
+                <input type="file" id="item-image" accept="image/*" class="w-full border rounded p-2">
+                <div id="image-preview-container" class="mt-2 hidden">
+                    <img id="preview-img" class="max-h-40 rounded border" alt="预览图">
+                    <button id="remove-img" class="text-red-500 text-sm mt-1 flex items-center">
+                        <i class="fa fa-trash mr-1"></i>移除图片
+                    </button>
+                </div>
+                <p class="text-xs text-gray-500 mt-1">支持jpg/png/webp格式，建议尺寸：800x800px</p>
+            </div>
+            <div class="flex gap-2 pt-2">
+                <button id="save-item" class="btn-primary flex-1">
+                    <i class="fa fa-save mr-1"></i>保存指令
+                </button>
+                <button id="cancel-form" class="btn-secondary flex-1">
+                    <i class="fa fa-times mr-1"></i>取消
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 详情弹窗 -->
+<div id="detail-modal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 hidden">
+    <div class="bg-white rounded-lg w-full max-w-3xl p-6 mx-4 max-h-[90vh] overflow-y-auto">
+        <div class="flex justify-between items-center mb-4">
+            <h3 id="detail-title" class="text-lg font-bold"></h3>
+            <div class="flex gap-2">
+                <button id="detail-edit" class="btn-secondary px-3 py-1 text-sm">
+                    <i class="fa fa-edit mr-1"></i>编辑
+                </button>
+                <button id="detail-delete" class="btn-danger px-3 py-1 text-sm">
+                    <i class="fa fa-trash mr-1"></i>删除
+                </button>
+                <button id="close-detail" class="text-gray-500 hover:text-gray-700">
+                    <i class="fa fa-times text-xl"></i>
+                </button>
+            </div>
+        </div>
+        <span id="detail-tag" class="inline-block px-2 py-1 text-xs bg-primary/10 text-primary rounded-full mb-4"></span>
+        <div id="detail-image-wrap" class="mb-4 hidden">
+            <img id="detail-img" class="w-full max-h-64 object-contain rounded border" alt="成果图片">
+        </div>
+        <div class="bg-gray-50 p-4 rounded mb-4">
+            <div class="text-sm font-medium text-gray-700 mb-2">指令内容</div>
+            <pre id="detail-content" class="whitespace-pre-wrap text-gray-800"></pre>
+        </div>
+        <div class="mb-4">
+            <div class="text-sm font-medium text-gray-700 mb-2">使用说明</div>
+            <p id="detail-desc" class="text-gray-700"></p>
+        </div>
+        <button id="detail-copy" class="btn-primary w-full">
+            <i class="fa fa-copy mr-2"></i>复制指令
+        </button>
+    </div>
+</div>
+
+<script>
+// ====================== 初始化数据 ======================
+// 基础分类：动态类、3D类、基础设计素材类、UI类
+let categories = JSON.parse(localStorage.getItem('categories')) || [
+    "动态类", "3D类", "基础设计素材类", "UI类"
+];
+
+let items = JSON.parse(localStorage.getItem('ai-items')) || [];
+
+// ====================== 工具函数 ======================
+// 保存分类到本地存储
+function saveCategories() {
+    localStorage.setItem('categories', JSON.stringify(categories));
+}
+
+// 保存指令到本地存储
+function saveItems() {
+    localStorage.setItem('ai-items', JSON.stringify(items));
+}
+
+// 文件转Base64
+function fileToBase64(file, callback) {
+    try {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            callback(e.target.result);
+        };
+        reader.onerror = function() {
+            alert('图片读取失败，请换一张图片试试');
+        };
+        reader.readAsDataURL(file);
+    } catch (e) {
+        alert('图片处理出错：' + e.message);
+    }
+}
+
+// 生成唯一ID
+function generateId() {
+    return Date.now() + Math.floor(Math.random() * 1000);
+}
+
+// ====================== 渲染分类标签 ======================
+function renderCategoryTabs() {
+    const container = document.getElementById('category-tabs');
+    // 清空原有内容
+    container.innerHTML = '';
+    // 添加"全部"标签
+    container.innerHTML += `<li><button class="btn-primary category-tab" data-cat="all">全部</button></li>`;
+    // 添加所有分类标签
+    categories.forEach(cat => {
+        container.innerHTML += `
+            <li>
+                <button class="btn-secondary category-tab" data-cat="${cat}">${cat}</button>
+            </li>
+        `;
+    });
+    // 绑定分类标签点击事件
+    bindCategoryTabEvents();
+}
+
+// ====================== 渲染分类下拉框 ======================
+function renderCategorySelect() {
+    const select = document.getElementById('item-category');
+    select.innerHTML = '';
+    // 添加默认选项
+    select.innerHTML += `<option value="">请选择分类</option>`;
+    // 添加所有分类
+    categories.forEach(cat => {
+        select.innerHTML += `<option value="${cat}">${cat}</option>`;
+    });
+}
+
+// ====================== 渲染指令列表 ======================
+function renderList(list = items) {
+    const container = document.getElementById('list');
+    
+    if (list.length === 0) {
+        container.innerHTML = `
+            <div class="col-span-full text-center py-12">
+                <i class="fa fa-file-text-o text-gray-300 text-4xl mb-4"></i>
+                <p class="text-gray-500">暂无AI指令，点击"新增指令"创建第一条吧</p>
+            </div>
+        `;
+        return;
+    }
+    
+    container.innerHTML = list.map(item => `
+        <div class="bg-white rounded-lg shadow-sm overflow-hidden card-hover">
+            ${item.image ? `
+                <div class="h-44 overflow-hidden">
+                    <img src="${item.image}" class="w-full h-full object-cover" alt="${item.title}">
+                </div>
+            ` : ''}
+            <div class="p-4">
+                <span class="text-xs font-medium px-2 py-1 rounded-full bg-primary/10 text-primary">${item.category}</span>
+                <h3 class="font-bold text-lg mt-2 mb-1 line-clamp-1 hover:text-primary cursor-pointer view-btn" data-id="${item.id}">${item.title}</h3>
+                <p class="text-sm text-gray-600 line-clamp-2 mb-4">${item.desc || '无使用说明'}</p>
+                <div class="flex gap-2">
+                    <button class="btn-secondary flex-1 text-sm view-btn" data-id="${item.id}">
+                        <i class="fa fa-eye mr-1"></i>查看详情
+                    </button>
+                    <button class="btn-primary flex-1 text-sm copy-btn" data-content="${item.content}">
+                        <i class="fa fa-copy mr-1"></i>复制指令
+                    </button>
+                </div>
+            </div>
+        </div>
+    `).join('');
+    
+    // 绑定列表按钮事件
+    bindItemListEvents();
+}
+
+// ====================== 分类管理相关 ======================
+// 打开分类管理弹窗
+function openCategoryModal() {
+    document.getElementById('category-modal').classList.remove('hidden');
+    renderCategoryList();
+}
+
+// 关闭分类管理弹窗
+function closeCategoryModal() {
+    document.getElementById('category-modal').classList.add('hidden');
+    // 清空输入框
+    document.getElementById('new-category-name').value = '';
+}
+
+// 渲染分类列表
+function renderCategoryList() {
+    const list = document.getElementById('category-list');
+    list.innerHTML = '';
+    
+    categories.forEach((cat, index) => {
+        list.innerHTML += `
+            <li class="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                <span class="text-gray-800">${cat}</span>
+                <div class="flex gap-2">
+                    <button class="text-primary text-sm edit-cat" data-index="${index}">
+                        <i class="fa fa-pencil mr-1"></i>编辑
+                    </button>
+                    <button class="text-red-500 text-sm delete-cat" data-index="${index}">
+                        <i class="fa fa-trash mr-1"></i>删除
+                    </button>
+                </div>
+            </li>
+        `;
+    });
+    
+    // 绑定分类编辑/删除事件
+    bindCategoryEditDeleteEvents();
+}
+
+// 添加新分类
+function addNewCategory() {
+    const input = document.getElementById('new-category-name');
+    const catName = input.value.trim();
+    
+    // 校验
+    if (!catName) {
+        alert('请输入分类名称');
+        return;
+    }
+    if (categories.includes(catName)) {
+        alert('该分类已存在');
+        return;
+    }
+    
+    // 添加分类
+    categories.push(catName);
+    saveCategories();
+    
+    // 更新UI
+    renderCategoryList();
+    renderCategoryTabs();
+    renderCategorySelect();
+    
+    // 清空输入框
+    input.value = '';
+    
+    alert('分类添加成功');
+}
+
+// 编辑分类
+function editCategory(index) {
+    const oldName = categories[index];
+    const newName = prompt('请输入新的分类名称', oldName);
+    
+    if (!newName || newName.trim() === '') {
+        alert('分类名称不能为空');
+        return;
+    }
+    if (categories.includes(newName.trim()) && newName.trim() !== oldName) {
+        alert('该分类已存在');
+        return;
+    }
+    
+    const trimmedName = newName.trim();
+    
+    // 更新分类名称
+    categories[index] = trimmedName;
+    
+    // 同步更新所有指令的分类
+    items.forEach(item => {
+        if (item.category === oldName) {
+            item.category = trimmedName;
+        }
+    });
+    
+    // 保存数据
+    saveCategories();
+    saveItems();
+    
+    // 更新UI
+    renderCategoryList();
+    renderCategoryTabs();
+    renderCategorySelect();
+    renderList();
+    
+    alert('分类修改成功');
+}
+
+// 删除分类
+function deleteCategory(index) {
+    const catName = categories[index];
+    
+    if (!confirm(`确定要删除分类"${catName}"吗？该分类下的指令不会被删除`)) {
+        return;
+    }
+    
+    // 删除分类
+    categories.splice(index, 1);
+    saveCategories();
+    
+    // 更新UI
+    renderCategoryList();
+    renderCategoryTabs();
+    renderCategorySelect();
+    
+    alert('分类删除成功');
+}
+
+// ====================== 指令表单相关 ======================
+// 打开新增/编辑表单
+function openItemForm(id = null) {
+    const modal = document.getElementById('form-modal');
+    const titleText = document.getElementById('form-title-text');
+    const itemIdInput = document.getElementById('item-id');
+    
+    // 重置表单
+    resetItemForm();
+    
+    // 显示模态框
+    modal.classList.remove('hidden');
+    
+    if (!id) {
+        // 新增模式
+        titleText.textContent = '新增AI指令';
+        itemIdInput.value = '';
+        return;
+    }
+    
+    // 编辑模式
+    titleText.textContent = '编辑AI指令';
+    const item = items.find(item => item.id == id);
+    
+    if (!item) {
+        alert('未找到该指令');
+        modal.classList.add('hidden');
+        return;
+    }
+    
+    // 填充表单数据
+    itemIdInput.value = item.id;
+    document.getElementById('item-title').value = item.title;
+    document.getElementById('item-category').value = item.category;
+    document.getElementById('item-content').value = item.content;
+    document.getElementById('item-desc').value = item.desc || '';
+    
+    // 处理图片预览
+    if (item.image) {
+        const previewContainer = document.getElementById('image-preview-container');
+        const previewImg = document.getElementById('preview-img');
+        
+        previewImg.src = item.image;
+        previewImg.dataset.base64 = item.image;
+        previewContainer.classList.remove('hidden');
+    }
+}
+
+// 重置表单
+function resetItemForm() {
+    document.getElementById('item-id').value = '';
+    document.getElementById('item-title').value = '';
+    document.getElementById('item-category').value = '';
+    document.getElementById('item-content').value = '';
+    document.getElementById('item-desc').value = '';
+    document.getElementById('item-image').value = '';
+    
+    // 清空图片预览
+    const previewContainer = document.getElementById('image-preview-container');
+    const previewImg = document.getElementById('preview-img');
+    previewImg.src = '';
+    previewImg.dataset.base64 = '';
+    previewContainer.classList.add('hidden');
+}
+
+// 关闭表单
+function closeItemForm() {
+    document.getElementById('form-modal').classList.add('hidden');
+    resetItemForm();
+}
+
+// 保存指令
+function saveItem() {
+    // 获取表单数据
+    const id = document.getElementById('item-id').value || generateId();
+    const title = document.getElementById('item-title').value.trim();
+    const category = document.getElementById('item-category').value;
+    const content = document.getElementById('item-content').value.trim();
+    const desc = document.getElementById('item-desc').value.trim();
+    
+    // 校验必填项
+    if (!title) {
+        alert('请输入指令标题');
+        document.getElementById('item-title').focus();
+        return;
+    }
+    if (!category) {
+        alert('请选择分类');
+        document.getElementById('item-category').focus();
+        return;
+    }
+    if (!content) {
+        alert('请输入AI指令内容');
+        document.getElementById('item-content').focus();
+        return;
+    }
+    
+    // 获取图片Base64
+    const previewImg = document.getElementById('preview-img');
+    const image = previewImg.dataset.base64 || '';
+    
+    // 构造指令对象
+    const itemData = {
+        id: id,
+        title: title,
+        category: category,
+        content: content,
+        desc: desc,
+        image: image
+    };
+    
+    // 判断是新增还是编辑
+    const isEdit = !!document.getElementById('item-id').value;
+    
+    if (isEdit) {
+        // 编辑模式
+        const index = items.findIndex(item => item.id == id);
+        if (index !== -1) {
+            items[index] = itemData;
+        }
+    } else {
+        // 新增模式
+        items.unshift(itemData);
+    }
+    
+    // 保存数据
+    saveItems();
+    
+    // 更新UI
+    renderList();
+    closeItemForm();
+    
+    // 提示
+    alert(isEdit ? '指令编辑成功！' : '指令新增成功！');
+}
+
+// 处理图片上传
+function handleImageUpload(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    // 校验文件类型
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+        alert('仅支持上传jpg/png/webp格式的图片');
+        return;
+    }
+    
+    // 校验文件大小（限制5MB）
+    if (file.size > 5 * 1024 * 1024) {
+        alert('图片大小不能超过5MB');
+        return;
+    }
+    
+    // 转换为Base64
+    fileToBase64(file, function(base64) {
+        const previewContainer = document.getElementById('image-preview-container');
+        const previewImg = document.getElementById('preview-img');
+        
+        previewImg.src = base64;
+        previewImg.dataset.base64 = base64;
+        previewContainer.classList.remove('hidden');
+    });
+}
+
+// 移除图片
+function removeImage() {
+    const previewContainer = document.getElementById('image-preview-container');
+    const previewImg = document.getElementById('preview-img');
+    const imageInput = document.getElementById('item-image');
+    
+    previewImg.src = '';
+    previewImg.dataset.base64 = '';
+    imageInput.value = '';
+    previewContainer.classList.add('hidden');
+}
+
+// ====================== 指令详情相关 ======================
+// 打开详情弹窗
+function openDetailModal(id) {
+    const item = items.find(item => item.id == id);
+    if (!item) return;
+    
+    const modal = document.getElementById('detail-modal');
+    const titleEl = document.getElementById('detail-title');
+    const tagEl = document.getElementById('detail-tag');
+    const imageWrap = document.getElementById('detail-image-wrap');
+    const imageEl = document.getElementById('detail-img');
+    const contentEl = document.getElementById('detail-content');
+    const descEl = document.getElementById('detail-desc');
+    
+    // 填充数据
+    titleEl.textContent = item.title;
+    tagEl.textContent = item.category;
+    contentEl.textContent = item.content;
+    descEl.textContent = item.desc || '无使用说明';
+    
+    // 处理图片
+    if (item.image) {
+        imageEl.src = item.image;
+        imageWrap.classList.remove('hidden');
+    } else {
+        imageWrap.classList.add('hidden');
+    }
+    
+    // 保存ID到按钮
+    document.getElementById('detail-edit').dataset.id = id;
+    document.getElementById('detail-delete').dataset.id = id;
+    
+    // 显示模态框
+    modal.classList.remove('hidden');
+}
+
+// 关闭详情弹窗
+function closeDetailModal() {
+    document.getElementById('detail-modal').classList.add('hidden');
+}
+
+// 复制指令内容
+function copyItemContent(content, btn) {
+    try {
+        navigator.clipboard.writeText(content).then(() => {
+            // 按钮状态反馈
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<i class="fa fa-check mr-2"></i>复制成功';
+            btn.classList.remove('btn-secondary');
+            btn.classList.add('btn-primary');
+            
+            setTimeout(() => {
+                btn.innerHTML = originalText;
+                btn.classList.remove('btn-primary');
+                btn.classList.add('btn-secondary');
+            }, 2000);
+        });
+    } catch (err) {
+        alert('复制失败，请手动复制');
+    }
+}
+
+// 删除指令
+function deleteItem(id) {
+    if (!confirm('确定要删除这条指令吗？删除后无法恢复！')) {
+        return;
+    }
+    
+    // 过滤掉要删除的指令
+    items = items.filter(item => item.id != id);
+    
+    // 保存数据
+    saveItems();
+    
+    // 更新UI
+    renderList();
+    closeDetailModal();
+    
+    alert('指令删除成功');
+}
+
+// ====================== 事件绑定 ======================
+// 绑定分类标签事件
+function bindCategoryTabEvents() {
+    document.querySelectorAll('.category-tab').forEach(btn => {
+        btn.addEventListener('click', function() {
+            // 切换按钮样式
+            document.querySelectorAll('.category-tab').forEach(tab => {
+                tab.classList.remove('btn-primary');
+                tab.classList.add('btn-secondary');
+            });
+            this.classList.remove('btn-secondary');
+            this.classList.add('btn-primary');
+            
+            // 筛选指令
+            const category = this.dataset.cat;
+            if (category === 'all') {
+                renderList(items);
+            } else {
+                const filteredItems = items.filter(item => item.category === category);
+                renderList(filteredItems);
+            }
+        });
+    });
+}
+
+// 绑定列表按钮事件
+function bindItemListEvents() {
+    // 查看详情按钮
+    document.querySelectorAll('.view-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const id = this.dataset.id;
+            openDetailModal(id);
+        });
+    });
+    
+    // 复制按钮
+    document.querySelectorAll('.copy-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const content = this.dataset.content;
+            copyItemContent(content, this);
+        });
+    });
+}
+
+// 绑定分类编辑/删除事件
+function bindCategoryEditDeleteEvents() {
+    // 编辑分类
+    document.querySelectorAll('.edit-cat').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const index = parseInt(this.dataset.index);
+            editCategory(index);
+        });
+    });
+    
+    // 删除分类
+    document.querySelectorAll('.delete-cat').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const index = parseInt(this.dataset.index);
+            deleteCategory(index);
+        });
+    });
+}
+
+// ====================== 搜索功能 ======================
+function handleSearch(e) {
+    const keyword = e.target.value.toLowerCase().trim();
+    
+    if (!keyword) {
+        renderList(items);
+        return;
+    }
+    
+    // 筛选包含关键词的指令
+    const filteredItems = items.filter(item => 
+        item.title.toLowerCase().includes(keyword) ||
+        item.category.toLowerCase().includes(keyword) ||
+        item.content.toLowerCase().includes(keyword) ||
+        (item.desc && item.desc.toLowerCase().includes(keyword))
+    );
+    
+    renderList(filteredItems);
+}
+
+// ====================== 初始化所有事件 ======================
+function initEvents() {
+    // 顶部按钮事件
+    document.getElementById('add-btn').addEventListener('click', () => openItemForm());
+    document.getElementById('category-manage-btn').addEventListener('click', openCategoryModal);
+    
+    // 分类管理事件
+    document.getElementById('close-category-modal').addEventListener('click', closeCategoryModal);
+    document.getElementById('add-category-btn').addEventListener('click', addNewCategory);
+    
+    // 表单事件
+    document.getElementById('close-form').addEventListener('click', closeItemForm);
+    document.getElementById('cancel-form').addEventListener('click', closeItemForm);
+    document.getElementById('save-item').addEventListener('click', saveItem);
+    document.getElementById('item-image').addEventListener('change', handleImageUpload);
+    document.getElementById('remove-img').addEventListener('click', removeImage);
+    
+    // 详情弹窗事件
+    document.getElementById('close-detail').addEventListener('click', closeDetailModal);
+    document.getElementById('detail-edit').addEventListener('click', function() {
+        const id = this.dataset.id;
+        closeDetailModal();
+        openItemForm(id);
+    });
+    document.getElementById('detail-delete').addEventListener('click', function() {
+        const id = this.dataset.id;
+        deleteItem(id);
+    });
+    document.getElementById('detail-copy').addEventListener('click', function() {
+        const content = document.getElementById('detail-content').textContent;
+        copyItemContent(content, this);
+    });
+    
+    // 搜索事件
+    document.getElementById('search-input').addEventListener('input', handleSearch);
+    
+    // 点击模态框外部关闭
+    document.getElementById('category-modal').addEventListener('click', function(e) {
+        if (e.target === this) closeCategoryModal();
+    });
+    document.getElementById('form-modal').addEventListener('click', function(e) {
+        if (e.target === this) closeItemForm();
+    });
+    document.getElementById('detail-modal').addEventListener('click', function(e) {
+        if (e.target === this) closeDetailModal();
+    });
+}
+
+// ====================== 初始化应用 ======================
+function initApp() {
+    // 初始化事件绑定
+    initEvents();
+    
+    // 渲染初始界面
+    renderCategoryTabs();
+    renderCategorySelect();
+    renderList();
+}
+
+// 启动应用
+initApp();
+</script>
+</body>
+</html>
